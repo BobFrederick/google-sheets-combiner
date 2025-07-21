@@ -1,0 +1,18 @@
+# Google Sheets URLs Configuration Template
+# Copy this file to 'urls.txt' and add your actual Google Sheets URLs
+
+# Instructions:
+# 1. Copy this file: cp urls.txt.template urls.txt
+# 2. Add your Google Sheets URLs below (one per line)
+# 3. Remove the # comments from your actual URLs
+
+# Example URLs (replace with your actual Google Sheets):
+# https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_1/edit#gid=0
+# https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_2/edit#gid=0
+# https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_3/edit#gid=0
+
+# For Excel files that need conversion, use their Google Drive URLs:
+# https://drive.google.com/file/d/YOUR_EXCEL_FILE_ID/view
+
+# Note: This template is safe to commit to version control.
+# The actual urls.txt file is excluded by .gitignore for security.
