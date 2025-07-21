@@ -113,6 +113,7 @@ token.json
 
 # Configuration files with sensitive URLs
 config/urls.txt
+config/output_config.json
 
 # Output files
 output/

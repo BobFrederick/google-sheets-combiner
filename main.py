@@ -12,6 +12,7 @@ from src.google_sheets_extractor import GoogleSheetsExtractor
 from src.excel_combiner import ExcelCombiner
 from src.drive_converter import DriveFileConverter
 from src.quota_monitor import quota_monitor
+from src.unc_path_manager import unc_path_manager
 
 
 def create_urls_file():
@@ -51,10 +52,20 @@ def main():
     parser.add_argument('--keep-converted',
                        action='store_true',
                        help='Keep intermediate Google Sheets after combination')
+    parser.add_argument('--unc-path',
+                       help='Save to UNC network path (overrides config)')
+    parser.add_argument('--show-path-config',
+                       action='store_true',
+                       help='Show current output path configuration')
     
     args = parser.parse_args()
     
     try:
+        # Show path configuration if requested
+        if args.show_path_config:
+            print(unc_path_manager.get_configuration_summary())
+            return 0
+        
         # Validate configuration
         Config.validate_config()
         
@@ -66,8 +77,18 @@ def main():
             print("Please add Google Sheets URLs to config/urls.txt and run again.")
             return 1
         
+        # Determine output path
+        if args.unc_path:
+            output_path = args.unc_path
+            print(f"Using UNC path override: {output_path}")
+        else:
+            output_path = unc_path_manager.get_output_path(args.output)
+            if unc_path_manager.is_unc_enabled():
+                print(f"Using configured UNC path: {output_path}")
+            else:
+                print(f"Using local path: {output_path}")
+        
         print(f"Found {len(sheet_urls)} Google Sheets to process")
-        print(f"Output file: {args.output}")
         
         # Initialize converter for potential cleanup
         converter = None
@@ -95,7 +116,7 @@ def main():
         print("-" * 50)
         
         # Combine into Excel
-        combiner = ExcelCombiner(args.output)
+        combiner = ExcelCombiner()
         
         for tab_name, df in all_data.items():
             print(f"Adding to Excel: {tab_name} ({len(df)} rows)")
@@ -103,7 +124,7 @@ def main():
         
         # Save the file
         print("-" * 50)
-        if combiner.save():
+        if combiner.save(output_path):
             summary = combiner.get_sheet_summary()
             print("\nSummary:")
             for sheet, row_count in summary.items():

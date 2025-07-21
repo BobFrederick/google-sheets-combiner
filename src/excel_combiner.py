@@ -1,4 +1,6 @@
 import re
+import os
+import tempfile
 from typing import Dict
 import pandas as pd
 from openpyxl import Workbook
@@ -83,19 +85,76 @@ class ExcelCombiner:
             adjusted_width = min(max_length + 2, 50)
             worksheet.column_dimensions[column_letter].width = adjusted_width
     
-    def save(self):
-        """Save the workbook to file"""
+    def save(self, target_path: str = None):
+        """Save the workbook to file with UNC path support"""
         if not self.workbook.worksheets:
             print("No data to save!")
             return False
         
+        # Use provided path or the configured path
+        save_path = target_path or self.output_filename
+        
         try:
-            self.workbook.save(self.output_filename)
-            print(f"Successfully saved: {self.output_filename}")
-            print(f"Total sheets: {len(self.workbook.worksheets)}")
-            return True
+            # For UNC paths, we might need special handling
+            if save_path.startswith("\\\\"):
+                # This is a UNC path, let the UNC manager handle it
+                return self._save_with_unc_support(save_path)
+            else:
+                # Standard local save
+                return self._save_locally(save_path)
+                
         except Exception as e:
             print(f"Error saving file: {e}")
+            return False
+    
+    def _save_locally(self, file_path: str) -> bool:
+        """Save file locally with directory creation"""
+        try:
+            # Ensure directory exists
+            directory = os.path.dirname(file_path)
+            if directory and not os.path.exists(directory):
+                os.makedirs(directory, exist_ok=True)
+            
+            self.workbook.save(file_path)
+            print(f"✅ Successfully saved: {file_path}")
+            print(f"📊 Total sheets: {len(self.workbook.worksheets)}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error saving locally: {e}")
+            return False
+    
+    def _save_with_unc_support(self, unc_path: str) -> bool:
+        """Save file to UNC path using UNC path manager"""
+        try:
+            # Import here to avoid circular imports
+            from .unc_path_manager import unc_path_manager
+            
+            # Create a temporary file first
+            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
+                temp_path = temp_file.name
+            
+            # Save to temporary file
+            self.workbook.save(temp_path)
+            print(f"📝 Created temporary file: {temp_path}")
+            
+            # Use UNC manager to move to final location
+            success = unc_path_manager.save_file_safely(temp_path, unc_path)
+            
+            # Clean up temporary file
+            try:
+                os.unlink(temp_path)
+            except Exception as e:
+                print(f"⚠️  Could not remove temporary file: {e}")
+            
+            if success:
+                print(f"📊 Total sheets: {len(self.workbook.worksheets)}")
+                return True
+            else:
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error saving with UNC support: {e}")
             return False
     
     def get_sheet_summary(self) -> Dict[str, int]:

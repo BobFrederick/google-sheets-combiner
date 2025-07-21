@@ -1,0 +1,32 @@
+# Output Path Configuration Template
+# Copy this file to 'output_config.json' and customize your settings
+
+{
+    "output_paths": {
+        "default_local": "output/combined_sheets.xlsx",
+        "unc_drive_enabled": false,
+        "unc_base_path": "\\\\server\\share\\path\\to\\excel\\files",
+        "unc_filename_template": "combined_sheets_{timestamp}.xlsx",
+        "backup_to_local": true,
+        "create_subdirectories": true
+    },
+    "path_templates": {
+        "by_date": "\\\\server\\share\\reports\\{year}\\{month}\\combined_sheets_{date}.xlsx",
+        "by_project": "\\\\server\\share\\projects\\{project_name}\\combined_sheets.xlsx",
+        "timestamped": "\\\\server\\share\\archive\\combined_sheets_{timestamp}.xlsx"
+    },
+    "fallback_options": {
+        "use_local_on_unc_failure": true,
+        "create_missing_directories": true,
+        "verify_path_accessibility": true,
+        "retry_attempts": 3
+    },
+    "security": {
+        "validate_unc_path": true,
+        "allowed_unc_patterns": [
+            "\\\\companyserver\\*",
+            "\\\\fileserver\\shared\\*"
+        ],
+        "require_write_permissions": true
+    }
+}

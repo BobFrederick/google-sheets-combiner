@@ -71,13 +71,24 @@ python main.py --convert-excel --keep-converted
 # Custom output filename
 python main.py --convert-excel --output "my_combined_data.xlsx"
 
+# Save to UNC network drive
+python main.py --convert-excel --unc-path "\\\\server\\share\\reports\\combined.xlsx"
+
+# Show current path configuration
+python main.py --show-path-config
+
 # Process without conversion (Google Sheets only)
 python main.py
+```
 
-# Manual cleanup of intermediate files
-con
+### **Command Line Options:**
+- `--convert-excel` - Auto-convert Excel files to Google Sheets
 - `--output filename.xlsx` - Specify custom output filename
+- `--unc-path "\\\\server\\path"` - Save to UNC network path (overrides config)
+- `--show-path-config` - Display current output path configuration
 - `--max-tabs N` - Limit tabs per sheet (default: 10)
+- `--keep-converted` - Keep intermediate Google Sheets after combination
+- `--cleanup-originals` - Delete original Excel files after conversion
 
 ### **Legacy Batch Files:**
 ```bash
@@ -151,6 +162,50 @@ The system automatically enforces:
 - Automatic backoff when approaching limits
 - Warning messages at 90% of quota limits
 
+## 🗂️ UNC Drive Path Configuration
+
+### **Network Drive Support**
+Save combined Excel files directly to UNC network drives with enterprise-grade reliability:
+
+```bash
+# Configure UNC drive settings
+cp config/output_config.json.template config/output_config.json
+# Edit config/output_config.json with your network paths
+```
+
+### **Configuration Options**
+```json
+{
+    "output_paths": {
+        "unc_drive_enabled": true,
+        "unc_base_path": "\\\\server\\share\\reports",
+        "unc_filename_template": "combined_sheets_{timestamp}.xlsx",
+        "backup_to_local": true
+    },
+    "security": {
+        "validate_unc_path": true,
+        "allowed_unc_patterns": [
+            "\\\\companyserver\\*"
+        ]
+    }
+}
+```
+
+### **UNC Features**
+- **Automatic Fallback**: Falls back to local save if UNC path fails
+- **Path Validation**: Security checks against allowed UNC patterns
+- **Directory Creation**: Automatically creates missing network directories
+- **Local Backup**: Optional backup copy to local drive
+- **Template Variables**: Dynamic filenames with `{timestamp}`, `{date}`, `{year}`, etc.
+- **Retry Logic**: Multiple attempts with error handling
+
+### **Template Variables**
+Available for dynamic filenames:
+- `{timestamp}` - `20250721_143022`
+- `{date}` - `2025-07-21`
+- `{year}`, `{month}`, `{day}` - Individual date components
+- Custom variables via command line
+
 ## Requirements
 
 - **Python 3.7+** with virtual environment support
@@ -167,6 +222,35 @@ pip install -r requirements.txt
 
 # Setup Google API credentials
 # See docs/GOOGLE_API_SETUP.md for detailed instructions
+```
+
+## Usage
+
+### **Basic Operation**
+```bash
+python main.py
+```
+
+### **Command Line Options**
+```bash
+# Save to UNC network drive
+python main.py --unc-path "\\server\share\reports"
+
+# Show UNC path configuration
+python main.py --show-path-config
+
+# Combine with other options
+python main.py --unc-path "\\server\share" --config custom_config.json
+```
+
+### **Configuration Files**
+- `config/urls.txt` - Google Sheets URLs (one per line)
+- `config/output_config.json` - Output and UNC path settings (optional)
+  
+**Example urls.txt:**
+```
+https://docs.google.com/spreadsheets/d/1ABC.../edit
+https://docs.google.com/spreadsheets/d/2DEF.../edit
 ```
 
 ### **Project Structure:**
@@ -204,7 +288,25 @@ pip install -r requirements.txt
 
 ## Output
 
-Excel files are saved to the `output/` directory with:
+Excel files are saved based on configuration:
+
+### **Local Storage (Default)**
+```
+📁 output/
+  └── combined_sheets.xlsx
+```
+
+### **UNC Network Drive**
+```bash
+# With UNC path configured
+\\server\share\reports\combined_sheets_20250721_143022.xlsx
+
+# With local backup enabled (optional)
+📁 output/
+  └── combined_sheets.xlsx (backup copy)
+```
+
+### **Output Features**
 - **Smart tab names**: `1820 Tahoe_Construction Items`, `5109 OFW_Design Items`
 - **All tabs** from source sheets (up to configured limit)
 - **Formatted headers** with bold styling and gray background
@@ -214,13 +316,12 @@ Excel files are saved to the `output/` directory with:
 
 ### **Example Output Structure:**
 ```
-📁 output/
-  └── combined_sheets.xlsx
-      ├── 1820 Tahoe_Construction Items (44 rows)
-      ├── 1820 Tahoe_Design Items (13 rows)
-      ├── 1820 Tahoe_FF&E Items (32 rows)
-      ├── 5109 OFW_Budget Summary (156 rows)
-      └── 5109 OFW_Timeline (89 rows)
+📁 combined_sheets.xlsx
+  ├── 1820 Tahoe_Construction Items (44 rows)
+  ├── 1820 Tahoe_Design Items (13 rows)
+  ├── 1820 Tahoe_FF&E Items (32 rows)
+  ├── 5109 OFW_Budget Summary (156 rows)
+  └── 5109 OFW_Timeline (89 rows)
 ```
 
 ## Troubleshooting
@@ -237,6 +338,12 @@ Excel files are saved to the `output/` directory with:
 - **"File not found"**: Ensure files have proper sharing permissions
 - **"Internal Error 500"**: Large files automatically processed with enhanced method
 
+**UNC Network Drive Issues:**
+- **Path not accessible**: Check network connectivity and permissions
+- **Authentication required**: Ensure Windows authentication for network share
+- **Directory creation failed**: Verify write permissions to UNC path
+- **Automatic fallback**: System saves locally if UNC path fails
+
 **Authentication:**
 - **Token errors**: Delete `token.json` and re-authenticate
 - **Permission issues**: Ensure Google Drive and Sheets APIs are enabled
@@ -250,6 +357,29 @@ When standard conversion fails (typically for files >10MB or with binary data):
 3. 📊 Processes each sheet separately
 4. ☁️ Uploads clean data to new Google Sheets
 5. 🗑️ Cleans up intermediate files automatically
+
+## Security Best Practices
+
+### **UNC Drive Configuration**
+When using UNC network drives, follow these security guidelines:
+
+1. **Path Validation**: Always enable `validate_unc_path` in configuration
+2. **Allowed Patterns**: Restrict access using `allowed_unc_patterns`:
+   ```json
+   "allowed_unc_patterns": [
+       "\\\\companyserver\\reports\\*",
+       "\\\\fileserver01\\shared\\projects\\*"
+   ]
+   ```
+3. **Credential Management**: Use Windows integrated authentication when possible
+4. **Backup Strategy**: Enable `backup_to_local` for critical data
+5. **Access Logging**: Monitor UNC access attempts in application logs
+
+### **Configuration Security**
+- Keep `config/output_config.json` out of version control (use `.gitignore`)
+- Use configuration templates for team distribution
+- Regularly review and update allowed UNC patterns
+- Test UNC accessibility before production use
 
 ## Project Maintenance
 
