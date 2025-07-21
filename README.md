@@ -419,74 +419,125 @@ chmod 600 credentials.json
 source venv/bin/activate
 
 # Test run
-python main.py
+python main.py --help
 
-# Test with specific output path
-python main.py --unc-path "/shared/reports"
+# Test basic functionality
+python main.py --show-path-config
+
+# Test with conversion
+python main.py --convert-excel
 ```
 
-### **Step 5: Create Cron Job Script**
+### **Step 5: Create Automated Deployment Scripts**
+The repository includes automated setup scripts for easy deployment:
+
 ```bash
-# Create cron wrapper script
-cat > run_sheets_combiner.sh << 'EOF'
+# Interactive cron job setup tool
+./setup_cron.sh
+
+# Manual cron job script (created automatically)
+./run_sheets_combiner.sh
+```
+
+**Example cron script content:**
+```bash
 #!/bin/bash
-
-# Set working directory
 cd /home/yourusername/google-sheets-combiner
-
-# Activate virtual environment
 source venv/bin/activate
-
-# Set timezone (optional)
 export TZ='America/New_York'
-
-# Run the combiner with logging
-python main.py --unc-path "/shared/reports" >> logs/cron.log 2>&1
-
-# Deactivate virtual environment
-deactivate
-EOF
-
-# Make script executable
-chmod +x run_sheets_combiner.sh
-
-# Create logs directory
 mkdir -p logs
+
+# Run with local backup and network drive copy
+python main.py --convert-excel --output "output/combined_sheets.xlsx" >> logs/cron.log 2>&1
+
+# Check exit status and copy to network drive if successful
+EXIT_CODE=$?
+if [ $EXIT_CODE -eq 0 ] && [ -f "output/combined_sheets.xlsx" ]; then
+    # Copy to network drive (update path as needed)
+    cp "output/combined_sheets.xlsx" "/mnt/network-drive/path/combined_sheets.xlsx" 2>>logs/cron.log
+fi
+
+deactivate
+exit $EXIT_CODE
 ```
 
 ### **Step 6: Setup Cron Job**
+**Interactive Setup (Recommended):**
+```bash
+./setup_cron.sh
+```
+
+**Manual Setup:**
 ```bash
 # Edit crontab
 crontab -e
 
 # Add cron job entries (examples):
 
-# Run every day at 6:00 AM
+# Every 4 hours (recommended)
+0 */4 * * * /home/yourusername/google-sheets-combiner/run_sheets_combiner.sh
+
+# Every day at 6:00 AM
 0 6 * * * /home/yourusername/google-sheets-combiner/run_sheets_combiner.sh
 
-# Run every Monday at 8:00 AM
-0 8 * * 1 /home/yourusername/google-sheets-combiner/run_sheets_combiner.sh
-
-# Run every hour during business hours (9 AM - 5 PM, Mon-Fri)
-0 9-17 * * 1-5 /home/yourusername/google-sheets-combiner/run_sheets_combiner.sh
-
-# Run every 15 minutes (for testing)
-*/15 * * * * /home/yourusername/google-sheets-combiner/run_sheets_combiner.sh
+# Every weekday at 9 AM
+0 9 * * 1-5 /home/yourusername/google-sheets-combiner/run_sheets_combiner.sh
 ```
 
-### **Step 7: Monitoring & Maintenance**
+### **Step 7: Network Drive Configuration**
+
+**For Egnyte Drives:**
 ```bash
-# View cron logs
+# Check if Egnyte is mounted
+mount | grep egnyte
+
+# Typical Egnyte mount location
+ls -la /mnt/egnyte/
+
+# Fix permissions for your user (if needed)
+sudo chown -R $USER:$USER "/mnt/egnyte/path/to/your/folder"
+```
+
+**For SMB/CIFS Network Drives:**
+```bash
+# Install SMB utilities
+sudo apt install cifs-utils
+
+# Create mount point
+sudo mkdir -p /mnt/shared-reports
+
+# Mount network drive (temporary)
+sudo mount -t cifs //server/share /mnt/shared-reports -o username=youruser
+
+# For permanent mounting, add to /etc/fstab
+echo "//server/share /mnt/shared-reports cifs username=youruser,password=yourpass,uid=1000,gid=1000,iocharset=utf8 0 0" | sudo tee -a /etc/fstab
+```
+
+### **Step 8: Monitoring & Maintenance**
+```bash
+# Real-time log monitoring
 tail -f logs/cron.log
 
 # Check cron job status
 crontab -l
 
-# Monitor system cron logs
-tail -f /var/log/syslog | grep CRON
+# View recent activity summary
+tail -20 logs/cron.log
 
-# Set up log rotation (optional)
-cat > /etc/logrotate.d/sheets-combiner << 'EOF'
+# Interactive management
+./setup_cron.sh
+
+# Manual test run
+./run_sheets_combiner.sh
+```
+
+### **Step 9: Log Rotation Setup (Optional)**
+```bash
+# Install log rotation
+sudo cp logrotate.conf /etc/logrotate.d/sheets-combiner
+
+# Or create manually
+sudo tee /etc/logrotate.d/sheets-combiner << 'EOF'
 /home/yourusername/google-sheets-combiner/logs/*.log {
     daily
     missingok
@@ -494,67 +545,147 @@ cat > /etc/logrotate.d/sheets-combiner << 'EOF'
     compress
     notifempty
     copytruncate
+    create 644 yourusername yourusername
 }
 EOF
 ```
 
-### **Step 8: Network Drive Configuration (Linux)**
+### **Deployment Verification**
+After setup, verify everything is working:
+
 ```bash
-# For SMB/CIFS network drives
-sudo apt install cifs-utils
+# 1. Test the application
+source venv/bin/activate
+python main.py --help
 
-# Create mount point
-sudo mkdir -p /mnt/shared-reports
+# 2. Test the cron script
+./run_sheets_combiner.sh
 
-# Mount network drive (temporary)
-sudo mount -t cifs //server/share /mnt/shared-reports -o username=youruser,password=yourpass
+# 3. Check output files
+ls -la output/
+ls -la /mnt/network-drive/path/ # if using network drive
 
-# For permanent mounting, add to /etc/fstab
-echo "//server/share /mnt/shared-reports cifs username=youruser,password=yourpass,uid=1000,gid=1000,iocharset=utf8 0 0" | sudo tee -a /etc/fstab
+# 4. Verify cron installation
+crontab -l
 
-# Update output configuration for Linux paths
-nano config/output_config.json
-# Change UNC paths to Linux mount points:
-# "unc_base_path": "/mnt/shared-reports/excel-files"
+# 5. Monitor first automated run
+tail -f logs/cron.log
 ```
 
-### **Cron Schedule Examples**
+### **Common Cron Schedules**
 ```bash
-# Minute Hour Day Month DayOfWeek Command
+# Every 15 minutes (testing)
+*/15 * * * * /path/to/run_sheets_combiner.sh
 
-# Every day at 2:30 AM
-30 2 * * * /path/to/run_sheets_combiner.sh
+# Every 4 hours (recommended for active projects)
+0 */4 * * * /path/to/run_sheets_combiner.sh
 
 # Twice daily (6 AM and 6 PM)
 0 6,18 * * * /path/to/run_sheets_combiner.sh
 
-# Every weekday at 9 AM
-0 9 * * 1-5 /path/to/run_sheets_combiner.sh
+# Business hours only (9 AM - 5 PM, Mon-Fri)
+0 9-17 * * 1-5 /path/to/run_sheets_combiner.sh
 
-# Every 4 hours
-0 */4 * * * /path/to/run_sheets_combiner.sh
+# Daily at 2:30 AM
+30 2 * * * /path/to/run_sheets_combiner.sh
 
-# First day of every month at midnight
+# Weekly on Monday at 8 AM
+0 8 * * 1 /path/to/run_sheets_combiner.sh
+
+# First day of every month
 0 0 1 * * /path/to/run_sheets_combiner.sh
 ```
 
 ### **Troubleshooting Linux Deployment**
+
+**Permission Issues:**
+```bash
+# Fix script permissions
+chmod +x run_sheets_combiner.sh setup_cron.sh
+
+# Fix network drive permissions
+sudo chown -R $USER:$USER "/mnt/network-drive/your-folder"
+
+# Check file creation
+ls -la output/
+```
+
+**Cron Job Issues:**
 ```bash
 # Check if cron job ran
 grep "run_sheets_combiner" /var/log/syslog
 
 # Test cron environment
-* * * * * env > /tmp/cron-env.txt
+env -i /bin/bash --noprofile --norc ./run_sheets_combiner.sh
 
-# Manual testing with cron environment
-env -i /bin/bash --noprofile --norc /path/to/run_sheets_combiner.sh
+# Check cron service
+sudo systemctl status cron
+sudo systemctl restart cron
+```
 
-# Check Python path issues
-which python3
-python3 --version
+**Application Issues:**
+```bash
+# Check Python environment
+source venv/bin/activate
+which python
+python --version
+pip list
 
-# Verify virtual environment
-source venv/bin/activate && which python && python --version
+# Test Google API credentials
+python -c "import json; print('Credentials OK' if 'client_id' in json.load(open('credentials.json')) else 'Invalid credentials')"
+
+# Check configuration
+python main.py --show-path-config
+```
+
+**Network Drive Issues:**
+```bash
+# Test network drive access
+touch "/mnt/network-drive/test-file.txt"
+rm "/mnt/network-drive/test-file.txt"
+
+# Check mount status
+mount | grep network-drive
+df -h | grep network-drive
+
+# Test Egnyte specifically
+mount | grep egnyte
+ls -la /mnt/egnyte/
+```
+
+**Log Analysis:**
+```bash
+# Check for errors
+grep -i error logs/cron.log
+
+# Check success rate
+grep "completed with exit code" logs/cron.log
+
+# Monitor API usage
+grep "API Usage Summary" logs/cron.log
+
+# Check file operations
+grep -E "(File created|Successfully copied|Failed to copy)" logs/cron.log
+```
+
+### **Quick Deployment Commands**
+```bash
+# Complete setup in one go
+git clone https://github.com/BobFrederick/google-sheets-combiner.git
+cd google-sheets-combiner
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp config/*.template config/
+chmod +x *.sh
+
+# Edit configuration files
+nano config/urls.txt          # Add your Google Sheets URLs
+nano credentials.json         # Add your Google API credentials
+
+# Test and deploy
+./run_sheets_combiner.sh      # Test run
+./setup_cron.sh              # Interactive cron setup
 ```
 
 ## Security Best Practices

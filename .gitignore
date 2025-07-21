@@ -119,6 +119,10 @@ config/output_config.json
 output/
 *.xlsx
 
+# Log files
+logs/
+*.log
+
 # Python cache and virtual environment
 
 # IDE
