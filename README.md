@@ -358,6 +358,205 @@ When standard conversion fails (typically for files >10MB or with binary data):
 4. ☁️ Uploads clean data to new Google Sheets
 5. 🗑️ Cleans up intermediate files automatically
 
+## 🐧 Linux Deployment & Cron Job Setup
+
+### **Prerequisites**
+```bash
+# Install Python 3.7+ and pip
+sudo apt update
+sudo apt install python3 python3-pip python3-venv git
+
+# For CentOS/RHEL/Fedora
+sudo yum install python3 python3-pip git
+# or
+sudo dnf install python3 python3-pip git
+```
+
+### **Step 1: Clone and Setup**
+```bash
+# Clone the repository
+git clone https://github.com/BobFrederick/google-sheets-combiner.git
+cd google-sheets-combiner
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### **Step 2: Configuration**
+```bash
+# Copy configuration templates
+cp config/urls.txt.template config/urls.txt
+cp config/output_config.json.template config/output_config.json
+
+# Edit URLs file with your Google Sheets
+nano config/urls.txt
+
+# Configure output paths (optional for UNC/network drives)
+nano config/output_config.json
+```
+
+### **Step 3: Google API Credentials**
+```bash
+# Upload your credentials.json file
+# Method 1: SCP from Windows machine
+scp /path/to/credentials.json user@linux-server:/path/to/google-sheets-combiner/
+
+# Method 2: Create manually and paste content
+nano credentials.json
+# Paste your Google API credentials JSON content
+
+# Set proper permissions
+chmod 600 credentials.json
+```
+
+### **Step 4: Test Manual Execution**
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Test run
+python main.py
+
+# Test with specific output path
+python main.py --unc-path "/shared/reports"
+```
+
+### **Step 5: Create Cron Job Script**
+```bash
+# Create cron wrapper script
+cat > run_sheets_combiner.sh << 'EOF'
+#!/bin/bash
+
+# Set working directory
+cd /home/yourusername/google-sheets-combiner
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Set timezone (optional)
+export TZ='America/New_York'
+
+# Run the combiner with logging
+python main.py --unc-path "/shared/reports" >> logs/cron.log 2>&1
+
+# Deactivate virtual environment
+deactivate
+EOF
+
+# Make script executable
+chmod +x run_sheets_combiner.sh
+
+# Create logs directory
+mkdir -p logs
+```
+
+### **Step 6: Setup Cron Job**
+```bash
+# Edit crontab
+crontab -e
+
+# Add cron job entries (examples):
+
+# Run every day at 6:00 AM
+0 6 * * * /home/yourusername/google-sheets-combiner/run_sheets_combiner.sh
+
+# Run every Monday at 8:00 AM
+0 8 * * 1 /home/yourusername/google-sheets-combiner/run_sheets_combiner.sh
+
+# Run every hour during business hours (9 AM - 5 PM, Mon-Fri)
+0 9-17 * * 1-5 /home/yourusername/google-sheets-combiner/run_sheets_combiner.sh
+
+# Run every 15 minutes (for testing)
+*/15 * * * * /home/yourusername/google-sheets-combiner/run_sheets_combiner.sh
+```
+
+### **Step 7: Monitoring & Maintenance**
+```bash
+# View cron logs
+tail -f logs/cron.log
+
+# Check cron job status
+crontab -l
+
+# Monitor system cron logs
+tail -f /var/log/syslog | grep CRON
+
+# Set up log rotation (optional)
+cat > /etc/logrotate.d/sheets-combiner << 'EOF'
+/home/yourusername/google-sheets-combiner/logs/*.log {
+    daily
+    missingok
+    rotate 30
+    compress
+    notifempty
+    copytruncate
+}
+EOF
+```
+
+### **Step 8: Network Drive Configuration (Linux)**
+```bash
+# For SMB/CIFS network drives
+sudo apt install cifs-utils
+
+# Create mount point
+sudo mkdir -p /mnt/shared-reports
+
+# Mount network drive (temporary)
+sudo mount -t cifs //server/share /mnt/shared-reports -o username=youruser,password=yourpass
+
+# For permanent mounting, add to /etc/fstab
+echo "//server/share /mnt/shared-reports cifs username=youruser,password=yourpass,uid=1000,gid=1000,iocharset=utf8 0 0" | sudo tee -a /etc/fstab
+
+# Update output configuration for Linux paths
+nano config/output_config.json
+# Change UNC paths to Linux mount points:
+# "unc_base_path": "/mnt/shared-reports/excel-files"
+```
+
+### **Cron Schedule Examples**
+```bash
+# Minute Hour Day Month DayOfWeek Command
+
+# Every day at 2:30 AM
+30 2 * * * /path/to/run_sheets_combiner.sh
+
+# Twice daily (6 AM and 6 PM)
+0 6,18 * * * /path/to/run_sheets_combiner.sh
+
+# Every weekday at 9 AM
+0 9 * * 1-5 /path/to/run_sheets_combiner.sh
+
+# Every 4 hours
+0 */4 * * * /path/to/run_sheets_combiner.sh
+
+# First day of every month at midnight
+0 0 1 * * /path/to/run_sheets_combiner.sh
+```
+
+### **Troubleshooting Linux Deployment**
+```bash
+# Check if cron job ran
+grep "run_sheets_combiner" /var/log/syslog
+
+# Test cron environment
+* * * * * env > /tmp/cron-env.txt
+
+# Manual testing with cron environment
+env -i /bin/bash --noprofile --norc /path/to/run_sheets_combiner.sh
+
+# Check Python path issues
+which python3
+python3 --version
+
+# Verify virtual environment
+source venv/bin/activate && which python && python --version
+```
+
 ## Security Best Practices
 
 ### **UNC Drive Configuration**
